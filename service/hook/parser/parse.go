@@ -232,9 +232,13 @@ func (p *parser) Parse(req *http.Request, secretFunc func(string) string) (*core
 		}
 		return hook, repo, nil
 	case *scm.PullRequestHook:
-		if v.Action != scm.ActionOpen && v.Action != scm.ActionSync {
+		switch v.Action {
+		case scm.ActionOpen, scm.ActionClose, scm.ActionSync:
+			// Valid, continue
+		default:
 			return nil, nil, nil
 		}
+
 		// Pull Requests are not supported for Bitbucket due
 		// to lack of refs (e.g. refs/pull-requests/42/from).
 		// Please contact Bitbucket Support if you would like to
@@ -243,6 +247,7 @@ func (p *parser) Parse(req *http.Request, secretFunc func(string) string) (*core
 		if p.client.Driver == scm.DriverBitbucket {
 			return nil, nil, nil
 		}
+
 		hook = &core.Hook{
 			Trigger:      core.TriggerHook, // core.TriggerHook,
 			Event:        core.EventPullRequest,
