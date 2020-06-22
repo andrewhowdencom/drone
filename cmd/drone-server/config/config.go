@@ -51,6 +51,7 @@ type (
 		Agent        Agent
 		AzureBlob    AzureBlob
 		Convert      Convert
+		Cleanup      Cleanup
 		Cron         Cron
 		Cloning      Cloning
 		Database     Database
@@ -94,6 +95,13 @@ type (
 		Password   string `envconfig:"DRONE_GIT_PASSWORD"`
 		Image      string `envconfig:"DRONE_GIT_IMAGE"`
 		Pull       string `envconfig:"DRONE_GIT_IMAGE_PULL" default:"IfNotExists"`
+	}
+
+	Cleanup struct {
+		Disabled  bool         `envconfig:"DRONE_CLEANUP_DISABLED"`
+		Interval time.Duration `envconfig:"DRONE_CLEANUP_INTERVAL"         default:"24h"`
+		Running  time.Duration `envconfig:"DRONE_CLEANUP_DEADLINE_RUNNING" default:"24h"`
+		Pending  time.Duration `envconfig:"DRONE_CLEANUP_DEADLINE_PENDING" default:"24h"`
 	}
 
 	// Cron provides the cron configuration.
@@ -143,16 +151,16 @@ type (
 
 	// Nomad configuration.
 	Nomad struct {
-		Enabled     bool                `envconfig:"DRONE_NOMAD_ENABLED"`
-		Datacenters []string            `envconfig:"DRONE_NOMAD_DATACENTER" default:"dc1"`
-		Namespace   string              `envconfig:"DRONE_NOMAD_NAMESPACE"`
-		Region      string              `envconfig:"DRONE_NOMAD_REGION"`
-		Prefix      string              `envconfig:"DRONE_NOMAD_JOB_PREFIX" default:"drone-job-"`
-		Image       string              `envconfig:"DRONE_NOMAD_IMAGE"`
-		ImagePull   bool                `envconfig:"DRONE_NOMAD_IMAGE_PULL"`
-		Memory      int                 `envconfig:"DRONE_NOMAD_DEFAULT_RAM" default:"1024"`
-		Labels      map[string]string   `envconfig:"DRONE_NOMAD_LABELS"`
-		CPU         int                 `envconfig:"DRONE_NOMAD_DEFAULT_CPU" default:"500"`
+		Enabled     bool              `envconfig:"DRONE_NOMAD_ENABLED"`
+		Datacenters []string          `envconfig:"DRONE_NOMAD_DATACENTER" default:"dc1"`
+		Namespace   string            `envconfig:"DRONE_NOMAD_NAMESPACE"`
+		Region      string            `envconfig:"DRONE_NOMAD_REGION"`
+		Prefix      string            `envconfig:"DRONE_NOMAD_JOB_PREFIX" default:"drone-job-"`
+		Image       string            `envconfig:"DRONE_NOMAD_IMAGE"`
+		ImagePull   bool              `envconfig:"DRONE_NOMAD_IMAGE_PULL"`
+		Memory      int               `envconfig:"DRONE_NOMAD_DEFAULT_RAM" default:"1024"`
+		Labels      map[string]string `envconfig:"DRONE_NOMAD_LABELS"`
+		CPU         int               `envconfig:"DRONE_NOMAD_DEFAULT_CPU" default:"500"`
 	}
 
 	// License provides license configuration

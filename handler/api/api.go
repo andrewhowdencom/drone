@@ -16,6 +16,7 @@ package api
 
 import (
 	"net/http"
+	"os"
 
 	"github.com/drone/drone/core"
 	"github.com/drone/drone/handler/api/acl"
@@ -27,7 +28,10 @@ import (
 	"github.com/drone/drone/handler/api/queue"
 	"github.com/drone/drone/handler/api/repos"
 	"github.com/drone/drone/handler/api/repos/builds"
+	"github.com/drone/drone/handler/api/repos/builds/branches"
+	"github.com/drone/drone/handler/api/repos/builds/deploys"
 	"github.com/drone/drone/handler/api/repos/builds/logs"
+	"github.com/drone/drone/handler/api/repos/builds/pulls"
 	"github.com/drone/drone/handler/api/repos/builds/stages"
 	"github.com/drone/drone/handler/api/repos/collabs"
 	"github.com/drone/drone/handler/api/repos/crons"
@@ -78,69 +82,73 @@ func New(
 	stream core.LogStream,
 	syncer core.Syncer,
 	system *core.System,
+	transferer core.Transferer,
 	triggerer core.Triggerer,
 	users core.UserStore,
 	userz core.UserService,
 	webhook core.WebhookSender,
 ) Server {
 	return Server{
-		Builds:    builds,
-		Cron:      cron,
-		Commits:   commits,
-		Events:    events,
-		Globals:   globals,
-		Hooks:     hooks,
-		Logs:      logs,
-		License:   license,
-		Licenses:  licenses,
-		Orgs:      orgs,
-		Perms:     perms,
-		Repos:     repos,
-		Repoz:     repoz,
-		Scheduler: scheduler,
-		Secrets:   secrets,
-		Stages:    stages,
-		Steps:     steps,
-		Status:    status,
-		Session:   session,
-		Stream:    stream,
-		Syncer:    syncer,
-		System:    system,
-		Triggerer: triggerer,
-		Users:     users,
-		Userz:     userz,
-		Webhook:   webhook,
+		Builds:     builds,
+		Cron:       cron,
+		Commits:    commits,
+		Events:     events,
+		Globals:    globals,
+		Hooks:      hooks,
+		Logs:       logs,
+		License:    license,
+		Licenses:   licenses,
+		Orgs:       orgs,
+		Perms:      perms,
+		Repos:      repos,
+		Repoz:      repoz,
+		Scheduler:  scheduler,
+		Secrets:    secrets,
+		Stages:     stages,
+		Steps:      steps,
+		Status:     status,
+		Session:    session,
+		Stream:     stream,
+		Syncer:     syncer,
+		System:     system,
+		Transferer: transferer,
+		Triggerer:  triggerer,
+		Users:      users,
+		Userz:      userz,
+		Webhook:    webhook,
 	}
 }
 
 // Server is a http.Handler which exposes drone functionality over HTTP.
 type Server struct {
-	Builds    core.BuildStore
-	Cron      core.CronStore
-	Commits   core.CommitService
-	Events    core.Pubsub
-	Globals   core.GlobalSecretStore
-	Hooks     core.HookService
-	Logs      core.LogStore
-	License   *core.License
-	Licenses  core.LicenseService
-	Orgs      core.OrganizationService
-	Perms     core.PermStore
-	Repos     core.RepositoryStore
-	Repoz     core.RepositoryService
-	Scheduler core.Scheduler
-	Secrets   core.SecretStore
-	Stages    core.StageStore
-	Steps     core.StepStore
-	Status    core.StatusService
-	Session   core.Session
-	Stream    core.LogStream
-	Syncer    core.Syncer
-	System    *core.System
-	Triggerer core.Triggerer
-	Users     core.UserStore
-	Userz     core.UserService
-	Webhook   core.WebhookSender
+	Builds     core.BuildStore
+	Cron       core.CronStore
+	Commits    core.CommitService
+	Events     core.Pubsub
+	Globals    core.GlobalSecretStore
+	Hooks      core.HookService
+	Logs       core.LogStore
+	License    *core.License
+	Licenses   core.LicenseService
+	Orgs       core.OrganizationService
+	Perms      core.PermStore
+	Repos      core.RepositoryStore
+	Repoz      core.RepositoryService
+	Scheduler  core.Scheduler
+	Secrets    core.SecretStore
+	Stages     core.StageStore
+	Steps      core.StepStore
+	Status     core.StatusService
+	Session    core.Session
+	Stream     core.LogStream
+	Syncer     core.Syncer
+	System     *core.System
+	Transferer core.Transferer
+	Triggerer  core.Triggerer
+	Users      core.UserStore
+	Userz      core.UserService
+	Webhook    core.WebhookSender
+	Private    bool
 }
 
 // Handler returns an http.Handler
@@ -155,6 +163,12 @@ func (s Server) Handler() http.Handler {
 	r.Use(cors.Handler)
 
 	r.Route("/repos", func(r chi.Router) {
+		// temporary workaround to enable private mode
+		// for the drone server.
+		if os.Getenv("DRONE_SERVER_PRIVATE_MODE") == "true" {
+			r.Use(acl.AuthorizeUser)
+		}
+
 		r.With(
 			acl.AuthorizeAdmin,
 		).Get("/", repos.HandleAll(s.Repos))
@@ -182,7 +196,16 @@ func (s Server) Handler() http.Handler {
 
 			r.Route("/builds", func(r chi.Router) {
 				r.Get("/", builds.HandleList(s.Repos, s.Builds))
-				r.With(acl.CheckWriteAccess()).Post("/", builds.HandleCreate(s.Repos, s.Commits, s.Triggerer))
+				r.With(acl.CheckWriteAccess()).Post("/", builds.HandleCreate(s.Users, s.Repos, s.Commits, s.Triggerer))
+
+				r.Get("/branches", branches.HandleList(s.Repos, s.Builds))
+				r.With(acl.CheckWriteAccess()).Delete("/branches/*", branches.HandleDelete(s.Repos, s.Builds))
+
+				r.Get("/pulls", pulls.HandleList(s.Repos, s.Builds))
+				r.With(acl.CheckWriteAccess()).Delete("/pulls/{pull}", pulls.HandleDelete(s.Repos, s.Builds))
+
+				r.Get("/deployments", deploys.HandleList(s.Repos, s.Builds))
+				r.With(acl.CheckWriteAccess()).Delete("/deployments/*", deploys.HandleDelete(s.Repos, s.Builds))
 
 				r.Get("/latest", builds.HandleLast(s.Repos, s.Builds, s.Stages))
 				r.Get("/{number}", builds.HandleFind(s.Repos, s.Builds, s.Stages))
@@ -298,8 +321,9 @@ func (s Server) Handler() http.Handler {
 		r.Get("/", users.HandleList(s.Users))
 		r.Post("/", users.HandleCreate(s.Users, s.Userz, s.Webhook))
 		r.Get("/{user}", users.HandleFind(s.Users))
-		r.Patch("/{user}", users.HandleUpdate(s.Users))
-		r.Delete("/{user}", users.HandleDelete(s.Users, s.Webhook))
+		r.Patch("/{user}", users.HandleUpdate(s.Users, s.Transferer))
+		r.Delete("/{user}", users.HandleDelete(s.Users, s.Transferer, s.Webhook))
+		r.Get("/{user}/repos", users.HandleRepoList(s.Users, s.Repos))
 	})
 
 	r.Route("/stream", func(r chi.Router) {

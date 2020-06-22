@@ -233,11 +233,23 @@ func (p *parser) Parse(req *http.Request, secretFunc func(string) string) (*core
 		return hook, repo, nil
 	case *scm.PullRequestHook:
 		switch v.Action {
-		case scm.ActionOpen, scm.ActionClose, scm.ActionSync:
+		case scm.ActionOpen, scm.ActionSync:
 			// Valid, continue
+		case scm.ActionClose:
+			return &core.Hook{
+				Trigger: core.TriggerHook,
+				Event:   core.EventPullRequest,
+				Action:  core.ActionClose,
+				After:   v.PullRequest.Sha,
+				Ref:     v.PullRequest.Ref,
+			}, &core.Repository{
+				UID:       v.Repo.ID,
+				Namespace: v.Repo.Namespace,
+				Name:      v.Repo.Name,
+				Slug:      scm.Join(v.Repo.Namespace, v.Repo.Name),
+			}, nil
 		default:
 			return nil, nil, nil
-		}
 
 		// Pull Requests are not supported for Bitbucket due
 		// to lack of refs (e.g. refs/pull-requests/42/from).
@@ -289,6 +301,23 @@ func (p *parser) Parse(req *http.Request, secretFunc func(string) string) (*core
 		}
 		return hook, repo, nil
 	case *scm.BranchHook:
+
+		// TODO(bradrydzewski) cleanup the branch hook code.
+		if v.Action == scm.ActionDelete {
+			return &core.Hook{
+					Trigger: core.TriggerHook,
+					Event:   core.EventPush,
+					After:   v.Ref.Sha,
+					Action:  core.ActionDelete,
+					Target:  scm.TrimRef(v.Ref.Name),
+				}, &core.Repository{
+					UID:       v.Repo.ID,
+					Namespace: v.Repo.Namespace,
+					Name:      v.Repo.Name,
+					Slug:      scm.Join(v.Repo.Namespace, v.Repo.Name),
+				}, nil
+		}
+
 		if v.Action != scm.ActionCreate {
 			return nil, nil, nil
 		}
